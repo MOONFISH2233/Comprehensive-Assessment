@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CATALOG, YU, FORMULA_NAMES } from '../catalog.js';
+import { DEFAULT_CATALOG } from '../catalog.js';
+import { validateCatalog, countQuestions } from '../catalog-schema.js';
+
+const CATALOG = DEFAULT_CATALOG.groups;
+const YU = DEFAULT_CATALOG.yu;
+const FORMULA_NAMES = DEFAULT_CATALOG.formulaNames;
 
 test('五个育都有分组', () => {
   for (const y of ['D', 'Z', 'T', 'M', 'L']) {
@@ -25,6 +30,7 @@ test('分组与项目的 id 全局唯一', () => {
 // 这样以后任何人改动 catalog 漏掉一项，测试会立刻指出是哪一组。
 const EXPECTED_ITEMS = {
   'D-sizheng': 7,        // 细则 p1 参加思政教育加分
+  'Z-zhuanli': 5,        // 细则 p4 专利 2 项 + 论文 2 项 + 明月班种子轮 1 项
   'Z-kejihuodong': 50,   // 细则 p6–7 参加科技学术活动加分
   'T-duanlian': 13,      // 细则 p9 课外体育锻炼活动
   'T-bisai': 11,         // 细则 p9 体育比赛
@@ -97,15 +103,52 @@ test('荣誉分值表与细则一致', () => {
   assert.deepEqual([lv('college').leader, lv('college').member, lv('college').individual], [1, 0.5, 1]);
 });
 
-test('大创、专利、论文分值', () => {
-  const ky = CATALOG.find(g => g.id === 'Z-keyan');
-  const dc = (k) => ky.dachuang.find(d => d.key === k).scores;
-  assert.deepEqual(dc('national'), { 优: 6, 良: 5, 合格: 4 });
-  assert.deepEqual(dc('province'), { 优: 4, 良: 3, 合格: 2 });
-  assert.deepEqual(dc('school'), { 优: 2, 良: 1, 合格: 0.5 });
-  assert.equal(ky.dachuangExtra.score, 6, '明月班种子轮融资 6 分');
-  assert.deepEqual(ky.patent.map(p => p.score), [2, 1], '发明专利 2 分 / 实用新型 1 分');
-  assert.deepEqual(ky.paper.map(p => p.score), [6, 3], 'SCI 6 分 / 核心 3 分');
+test('大创分值表：级别 × 结题成绩', () => {
+  const dc = CATALOG.find(g => g.id === 'Z-dachuang');
+  assert.equal(dc.mode, 'grade');
+  assert.deepEqual(dc.rankNames, ['优秀', '良好', '合格']);
+  const s = (k) => dc.levels.find(l => l.key === k).scores;
+  assert.deepEqual(s('national'), [6, 5, 4], '国家级 优/良/合格');
+  assert.deepEqual(s('province'), [4, 3, 2], '省部级');
+  assert.deepEqual(s('school'), [2, 1, 0.5], '校级');
+});
+
+test('专利 / 论文 / 种子轮分值', () => {
+  const zl = CATALOG.find(g => g.id === 'Z-zhuanli');
+  const u = (id) => zl.items.find(i => i.id === id).unit;
+  assert.equal(u('Z-zl-inv'), 2, '发明专利 2 分');
+  assert.equal(u('Z-zl-util'), 1, '实用新型 1 分');
+  assert.equal(u('Z-lw-sci'), 6, 'SCI/EI/SSCI 6 分');
+  assert.equal(u('Z-lw-core'), 3, '核心期刊 3 分');
+  assert.equal(u('Z-cy-seed'), 6, '明月班种子轮融资 6 分');
+});
+
+test('每个分组都有 levels / items / options 之类能被表单消费的结构', () => {
+  // 这条是为一个真实 bug 加的：曾经有个分组用了自定义字段而不是标准结构，
+  // 分级表单读 group.levels[0] 会直接抛异常。
+  for (const g of CATALOG) {
+    if (g.mode === 'count') {
+      assert.ok(Array.isArray(g.items), `${g.id} 缺少 items`);
+    } else if (g.mode === 'items-grade') {
+      assert.ok(Array.isArray(g.items), `${g.id} 缺少 items`);
+      assert.ok(Array.isArray(g.levels) && g.levels.length, `${g.id} 缺少 levels`);
+      assert.ok(Array.isArray(g.rankNames) && g.rankNames.length, `${g.id} 缺少 rankNames`);
+    } else if (g.mode === 'grade') {
+      assert.ok(Array.isArray(g.levels) && g.levels.length, `${g.id} 缺少 levels`);
+      assert.ok(Array.isArray(g.rankNames) && g.rankNames.length, `${g.id} 缺少 rankNames`);
+      for (const l of g.levels) {
+        assert.ok(Array.isArray(l.scores), `${g.id} 的级别「${l.name}」缺少 scores 数组`);
+      }
+    } else if (g.mode === 'honor') {
+      assert.ok(Array.isArray(g.levels) && g.levels.length, `${g.id} 缺少 levels`);
+    } else if (g.mode === 'pickmax') {
+      assert.ok(Array.isArray(g.subgroups) && g.subgroups.length, `${g.id} 缺少 subgroups`);
+    } else if (g.mode === 'range' || g.mode === 'penalty') {
+      assert.ok(Array.isArray(g.options) && g.options.length, `${g.id} 缺少 options`);
+    } else if (g.mode === 'tier') {
+      assert.ok(Array.isArray(g.tiers) && g.tiers.length, `${g.id} 缺少 tiers`);
+    }
+  }
 });
 
 test('志愿时长档位与细则一致', () => {

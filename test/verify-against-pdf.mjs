@@ -6,7 +6,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CATALOG } from '../catalog.js';
+import { DEFAULT_CATALOG } from '../catalog.js';
+
+const CATALOG = DEFAULT_CATALOG.groups;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dumpPath = process.argv[2] ?? path.join(here, '..', '细则原文.txt');
@@ -25,6 +27,7 @@ const norm = (s) => s
   .replace(/[‘’']/g, "'")
   .replace(/[•·・]/g, '')
   .replace(/[，,]/g, ',')          // 细则原文自己在半角/全角逗号之间反复横跳
+  .replace(/[、]/g, '/')           // 顿号与斜杠在原文里混用（「SCI、EI、SSCI」vs「SCI / EI / SSCI」）
   .replace(/[；;]/g, ';')
   .replace(/[：:]/g, ':')
   .replace(/[（(]/g, '(')

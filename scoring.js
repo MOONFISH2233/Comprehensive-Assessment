@@ -1,4 +1,7 @@
-import { CATALOG } from './catalog.js';
+import { DEFAULT_CATALOG } from './catalog.js';
+
+// 默认算内置那份细则。运行时调用方会显式传入「当前选中的细则」的分组数组。
+const DEFAULT_GROUPS = DEFAULT_CATALOG.groups;
 
 /**
  * 计分引擎（纯函数，无副作用，可在 Node 里单测）
@@ -172,7 +175,7 @@ function groupScore(group, payload) {
   };
 }
 
-export function computeBreakdown(answers, catalog = CATALOG) {
+export function computeBreakdown(answers, catalog = DEFAULT_GROUPS) {
   const out = {};
   for (const group of catalog) {
     const r = groupScore(group, answers?.[group.id]);
@@ -190,7 +193,7 @@ export function computeBreakdown(answers, catalog = CATALOG) {
   return out;
 }
 
-export function computeScores(answers, catalog = CATALOG) {
+export function computeScores(answers, catalog = DEFAULT_GROUPS) {
   const bd = computeBreakdown(answers, catalog);
   const out = { D: 0, Z: 0, T: 0, M: 0, L: 0 };
   for (const [yu, v] of Object.entries(bd)) {
@@ -198,3 +201,4 @@ export function computeScores(answers, catalog = CATALOG) {
   }
   return out;
 }
+

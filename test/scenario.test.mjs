@@ -4,8 +4,10 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CATALOG } from '../catalog.js';
+import { DEFAULT_CATALOG } from '../catalog.js';
 import { computeScores } from '../scoring.js';
+
+const CATALOG = DEFAULT_CATALOG.groups;
 
 test('场景：一个典型学生的五育加分与手算一致', () => {
   const answers = {

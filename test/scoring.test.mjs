@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeScores, computeBreakdown } from '../scoring.js';
-import { CATALOG } from '../catalog.js';
+import { DEFAULT_CATALOG } from '../catalog.js';
+
+const CATALOG = DEFAULT_CATALOG.groups;
 
 /* ---------- count 模式与封顶 ---------- */
 

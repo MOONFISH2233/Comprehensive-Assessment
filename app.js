@@ -1,31 +1,34 @@
-import { CATALOG, YU, FORMULA_NAMES } from './catalog.js';
 import { computeScores, computeBreakdown } from './scoring.js';
+import {
+  getActiveCatalog, getActiveId, setActiveId, listCatalogs,
+  saveCatalog, deleteCatalog, duplicateCatalog, exportJSON, importJSON
+} from './catalog-store.js';
 
 const STORAGE_KEY = 'zongce-v1';
 
 /* ------------------------------------------------------------------ *
- * 两份文件数值不一致处。工具一律取学院细则的值（标题写明「2026 下学期」，
- * 更新更具体），但要让学生知道差异存在，必要时问辅导员。
+ * 当前生效的细则
+ *
+ * v1 里这些是从 catalog.js 硬编码导入的常量；v2 改成从 store 取，
+ * 用户可以导入/编辑自己的细则，「换一个学院」不再需要改代码。
+ * 切换细则后必须调 refreshCatalog()，否则页面还用着旧数据。
  * ------------------------------------------------------------------ */
-export const CONFLICTS = {
-  'Z-jingsai': '学院级一等奖：学院细则写 2 分，学校办法写 1 分。本工具按学院细则计 2 分。',
-  'D-shehui':  '本组有两处两份文件不一致：① 班长/团支书，学院细则 0.5–2.5 分，学校办法 0.5–1.5；' +
-               '② 校级社团学生干部，学院细则按考核合格 0.5 / 优秀 1.0，学校办法 0.5–2.5。' +
-               '本工具两处都按学院细则取值。',
-  'T-bisai':   '学院级一等奖：学院细则写 2 分，学校办法写 1 分。本工具按学院细则计 2 分。',
-  'M-bisai':   '学院级一等奖：学院细则写 2 分，学校办法写 1 分。本工具按学院细则计 2 分。',
-  'L-bisai':   '学院级一等奖：学院细则写 2 分，学校办法写 1 分。本工具按学院细则计 2 分。',
-  'L-sushe':   '宿舍文明卫生上限：学院细则写 0.5 分，学校办法写 0.6 分；' +
-               '学校办法另有「卓越工程师学院文明宿舍加 1 分」，学院细则未列。本工具按学院细则取 0.5 分上限。'
-};
+let CAT = getActiveCatalog();
+let CATALOG = CAT.groups;
+let YU = CAT.yu;
+let FORMULA_NAMES = CAT.formulaNames;
+let CONFLICTS = CAT.conflicts ?? {};
+let CHECKLIST = CAT.checklist ?? [];
 
-const CHECKLIST = [
-  '所有材料的落款日期都在 2026.03.02 – 2026.09.05 之间',
-  '没有和上学期重复加分的奖项（重复加分按违纪作弊处理，取消全年评奖评优资格）',
-  '活动类照片能看清本人出镜',
-  '劳育的志愿时长截图完整，能看到总时长数字',
-  '五个育的 PDF 都已生成，数字都已抄进收集表'
-];
+export function refreshCatalog() {
+  CAT = getActiveCatalog();
+  CATALOG = CAT.groups;
+  YU = CAT.yu;
+  FORMULA_NAMES = CAT.formulaNames;
+  CONFLICTS = CAT.conflicts ?? {};
+  CHECKLIST = CAT.checklist ?? [];
+  return CAT;
+}
 
 /* ------------------------------------------------------------------ *
  * 状态
@@ -117,7 +120,8 @@ export function reset() {
  * 小工具
  * ------------------------------------------------------------------ */
 
-const app = document.getElementById('app');
+// 这几个要 export：editor.js 复用同一套 DOM 容器和提示（见 main.js 的接线说明）
+export const app = document.getElementById('app');
 const banner = document.getElementById('banner');
 
 /**
@@ -132,12 +136,12 @@ const STORAGE_OK = (() => {
   } catch { return false; }
 })();
 
-const esc = (s) => String(s).replace(/[&<>"']/g, c =>
+export const esc = (s) => String(s).replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const fmt = (n) => (Math.round(n * 100) / 100).toFixed(2);
+export const fmt = (n) => (Math.round(n * 100) / 100).toFixed(2);
 
-function toast(msg, ms = 2200) {
+export function toast(msg, ms = 2200) {
   document.querySelector('.toast')?.remove();
   const d = document.createElement('div');
   d.className = 'toast';
@@ -311,16 +315,16 @@ function renderIntro() {
     <div class="card hero">
       <img src="./logo.png" alt="">
       <div class="hero-title">综测加分自评向导</div>
-      <div class="hero-sub">重庆大学国家卓越工程师学院 · 2026 下学期</div>
+      <div class="hero-sub">${esc([CAT.school, CAT.college].filter(Boolean).join(' · ') || CAT.name)}</div>
       <div class="hero-meta">
-        <span class="pill">材料区间 2026.03.02 – 2026.09.05</span>
-        <span class="pill warn">截止 2026-09-25 17:59</span>
+        ${CAT.materialRange ? `<span class="pill">材料区间 ${esc(CAT.materialRange)}</span>` : ''}
+        ${CAT.deadline ? `<span class="pill warn">截止 ${esc(CAT.deadline)}</span>` : ''}
       </div>
     </div>
 
     <div class="card">
       <h2 class="sec">工具用途</h2>
-      <p class="p">本工具依据学院《2026 下学期学生综合测评奖励加分项目实施细则》，
+      <p class="p">本工具依据《${esc(CAT.name)}》，
          逐条列出全部加分项目供自查，并按细则计算五育加分，生成收集表所需的证明材料 PDF。</p>
       <p class="p">收集表需提交 <b>五个育的加分数字</b>（各一栏）与对应的
          <b>证明材料 PDF</b>（各一份），本工具输出即为此两项。</p>
@@ -331,7 +335,7 @@ function renderIntro() {
       <ol class="steps">
         <li>
           <b>逐项自评</b>
-          <span>按细则顺序逐条确认，共约 136 项。未参加的项目直接跳过；整组均无的，可点击「本组全没有」。</span>
+          <span>按细则顺序逐条确认，共 ${flattenQuestions().length} 项。未参加的项目直接跳过；整组均无的，可点击「本组全没有」。</span>
         </li>
         <li>
           <b>上传材料</b>
@@ -339,22 +343,18 @@ function renderIntro() {
         </li>
         <li>
           <b>生成 PDF</b>
-          <span>每育生成一份 PDF，格式与学院《综测填写模板》一致，下载后上传至收集表对应栏位。</span>
+          <span>每育生成一份 PDF，格式与综测填写模板一致，下载后上传至收集表对应栏位。</span>
         </li>
       </ol>
     </div>
 
+    ${CAT.notes.length ? `
     <div class="card">
       <h2 class="sec">注意事项</h2>
       <ul class="tight">
-        <li>材料落款日期须在 <b>2026.03.02 – 2026.09.05</b> 之间。</li>
-        <li>上学期已加分的奖项<b>不得重复申报</b>。经查实重复加分的，
-            按学校有关规定处理，取消本学年评奖评优资格。</li>
-        <li>奖项级别以<b>落款章</b>为准：落款章为「重庆大学」或「重庆大学党委」
-            的认定为学校级，其余认定为学院级。</li>
-        <li>活动类照片须<b>本人出镜</b>；劳育加分须提供<b>完整的志愿时长截图</b>。</li>
+        ${CAT.notes.map(n => `<li>${esc(n)}</li>`).join('')}
       </ul>
-    </div>
+    </div>` : ''}
 
     <div class="card">
       <h2 class="sec">数据存储</h2>
@@ -374,9 +374,10 @@ function renderIntro() {
 
     <div class="card">
       <h2 class="sec">说明</h2>
-      <p class="p">本工具依据学院实施细则实现计分规则，<b>非学校官方工具</b>，
-         最终成绩以评审组认定为准。细则与学校办法存在 6 处数值不一致，
-         本工具一律按学院细则取值，并在相应位置标注。</p>
+      <p class="p">本工具依据细则实现计分规则，<b>非学校官方工具</b>，
+         最终成绩以评审组认定为准。${Object.keys(CAT.conflicts).length
+           ? `细则与学校办法存在 ${Object.keys(CAT.conflicts).length} 处数值不一致，
+              本工具一律按细则取值，并在相应位置标注。` : ''}</p>
       <p class="p">如有疑问请咨询辅导员。</p>
     </div>
 
@@ -407,10 +408,10 @@ function renderOverview() {
   const touched = answered > 0 || Object.keys(state.answers).length > 0;
 
   app.innerHTML = `
-    <div class="warnbox danger">
-      <b>注意事项</b>上学期已加过分的奖项不能再加。
-      同一证书跨学期重复加分，一经查实按违纪作弊处理，取消本学年全部评奖评优资格。
-    </div>
+    ${CAT.notes.length ? `<div class="warnbox danger">
+      <b>注意事项</b>
+      <ul>${CAT.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>
+    </div>` : ''}
 
     ${Object.values(YU).map(y => `
       <div class="card">
@@ -447,10 +448,14 @@ function renderOverview() {
         <button id="jumpResult">直接看结果</button>
         <button class="danger" id="reset">清空数据</button>
       </div>` : ''}
-    <button class="ghost" id="intro" style="width:100%">看使用说明</button>
+    <div class="btnrow">
+      <button class="ghost" id="intro">看使用说明</button>
+      <button class="ghost" id="catalogs">细则管理</button>
+    </div>
   `;
 
   app.querySelector('#intro').onclick = () => { state.view = 'intro'; save(); render(); };
+  app.querySelector('#catalogs').onclick = () => { state.view = 'catalogs'; save(); render(); };
 
   app.querySelector('#start').onclick = () => {
     state.editing = false; state.view = 'ask'; save(); render();
@@ -1765,6 +1770,13 @@ export function render() {
   // 问答页底部有固定作答栏，正文要留出等高的空，否则最后一行被挡住
   document.body.classList.toggle('has-answerbar', state.view === 'ask');
 
+  // 页头的学校/学院跟着当前细则走
+  const sub = document.getElementById('hdr-sub');
+  if (sub) {
+    sub.textContent = [CAT.school, CAT.college, CAT.term].filter(Boolean).join(' · ')
+                   || CAT.name || '';
+  }
+
   if (banner) {
     banner.innerHTML = STORAGE_OK ? '' :
       '<b>你的浏览器禁用了本地存储</b>（可能是无痕/隐私模式）。' +
@@ -1773,26 +1785,45 @@ export function render() {
   }
 
   try {
-    switch (state.view) {
-      case 'intro':  return renderIntro();
-      case 'ask':    return renderAsk();
-      case 'review': return renderReview();
-      case 'result': return renderResult();
-      case 'pdf':    return renderPdfPicker();
-      default:       return renderOverview();
-    }
+    const fn = views[state.view] ?? views.overview;
+    return fn();
   } catch (err) {
     console.error('渲染失败：', err);
     renderCrash(err);
   }
 }
 
-load();
-// 没看过使用说明的新用户（同学）先看说明；自己人已经看过的直接进总览
-if (!state.seenIntro && state.view === 'overview') state.view = 'intro';
-render();
-if (state.resumedAt != null && state.view === 'ask') {
-  const n = state.resumedAt;
-  state.resumedAt = null;
-  setTimeout(() => toast(`已恢复至第 ${n + 1} 项`, 3000), 400);
+/**
+ * 视图注册表。
+ * 主流程的页面在本文件注册；细则编辑器在 editor.js 注册（它 import 本文件的
+ * 共享设施，本文件不 import 它，避免循环依赖）。main.js 负责把两边接起来。
+ */
+export const views = {};
+export function registerViews(map) {
+  Object.assign(views, map);
+}
+
+registerViews({
+  intro: renderIntro,
+  overview: renderOverview,
+  ask: renderAsk,
+  review: renderReview,
+  result: renderResult,
+  pdf: renderPdfPicker
+});
+
+/**
+ * 启动。由 main.js 调用 —— 它负责先注册细则编辑器的视图再启动，
+ * 这样用户直接打开带 #edit 的链接时也能正常进编辑器。
+ */
+export function boot() {
+  load();
+  // 没看过使用说明的新用户先看说明；看过的直接进总览
+  if (!state.seenIntro && state.view === 'overview') state.view = 'intro';
+  render();
+  if (state.resumedAt != null && state.view === 'ask') {
+    const n = state.resumedAt;
+    state.resumedAt = null;
+    setTimeout(() => toast(`已恢复至第 ${n + 1} 项`, 3000), 400);
+  }
 }
