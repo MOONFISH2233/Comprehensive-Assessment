@@ -1,0 +1,13 @@
+# 依赖（本项目零运行时依赖，只需要 Node 跑测试）
+node_modules/
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# 本地临时文件
+*.log
+_recv/
+_prev_*.png

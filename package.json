@@ -1,0 +1,18 @@
+{
+  "name": "comprehensive-assessment-guide",
+  "version": "1.0.0",
+  "description": "综测加分自评向导：逐项确认加分项目、按细则自动算分、生成证明材料 PDF 的纯前端手机端工具",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MOONFISH2233/Comprehensive-Assessment.git"
+  },
+  "keywords": ["综测", "综合素质测评", "重庆大学", "前端", "jsPDF", "纯静态"],
+  "scripts": {
+    "test": "node --test",
+    "verify": "node test/verify-against-pdf.mjs",
+    "serve": "python -m http.server 8000"
+  }
+}
